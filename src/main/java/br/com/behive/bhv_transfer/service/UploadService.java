@@ -37,36 +37,29 @@ public class UploadService {
     }
 
     @Transactional
-    public LoteUpload salvarVistoria(UUID siteId, String nomeTecnico, List<MultipartFile> arquivos) throws IOException {
-        // 1. Acha o Site no banco
+    public LoteUpload salvarVistoriaCompactada(UUID siteId, String nomeTecnico, MultipartFile arquivoZip) throws IOException {
+        // 1. Valida o Site
         Site site = siteRepository.findById(siteId)
                 .orElseThrow(() -> new RuntimeException("Site não encontrado!"));
 
-        // 2. Cria o Lote de Upload
+        // 2. Cria o registro do Lote
         LoteUpload lote = new LoteUpload(site, nomeTecnico);
         lote = loteRepository.save(lote);
 
-        // 3. Garante que a pasta existe no seu Windows
+        // 3. Define e cria a pasta física no servidor da Behive
         Path caminhoPasta = Paths.get(pastaUpload);
         if (!Files.exists(caminhoPasta)) {
             Files.createDirectories(caminhoPasta);
         }
 
-        // 4. Salva cada foto
-        for (MultipartFile arquivo : arquivos) {
-            if (arquivo.isEmpty()) continue;
+        // 4. Salva o arquivo ZIP/RAR com nome único para evitar sobreposição
+        String nomeUnico = UUID.randomUUID().toString() + "_" + arquivoZip.getOriginalFilename();
+        Path caminhoDestino = caminhoPasta.resolve(nomeUnico);
+        arquivoZip.transferTo(caminhoDestino.toFile());
 
-            // Gera um nome único para não sobrescrever fotos com o mesmo nome
-            String nomeUnico = UUID.randomUUID().toString() + "_" + arquivo.getOriginalFilename();
-            Path caminhoDestino = caminhoPasta.resolve(nomeUnico);
-
-            // Copia o arquivo do Postman para a pasta do Windows
-            arquivo.transferTo(caminhoDestino.toFile());
-
-            // Salva o registro da foto no Banco de Dados
-            ArquivoFoto foto = new ArquivoFoto(lote, arquivo.getOriginalFilename(), caminhoDestino.toString(), arquivo.getSize());
-            fotoRepository.save(foto);
-        }
+        // 5. Registra no banco que este lote possui este arquivo específico
+        ArquivoFoto registro = new ArquivoFoto(lote, arquivoZip.getOriginalFilename(), caminhoDestino.toString(), arquivoZip.getSize());
+        fotoRepository.save(registro);
 
         return lote;
     }
