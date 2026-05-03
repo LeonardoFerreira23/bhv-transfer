@@ -22,10 +22,11 @@ Siga os passos abaixo para rodar a aplicação localmente:
     docker-compose up -d
     ```
 
-2.  **Configuração de Caminhos**:
-    Certifique-se de que a pasta de uploads está configurada corretamente no arquivo `src/main/resources/application.properties`:
+2.  **Configuração de Caminhos e Links**:
+    Certifique-se de configurar a pasta física e a URL dinâmica no arquivo `src/main/resources/application.properties`:
     ```properties
     app.pasta.upload=C:/seu-caminho/uploads
+    app.base.url=http://localhost:8080
     ```
 
 3.  **Execute a aplicação**:
@@ -41,8 +42,9 @@ O projeto foi construído utilizando as seguintes tecnologias:
 
 * **Spring Boot 3**: Framework principal para o desenvolvimento da API.
 * **Spring Data JPA**: Abstração de persistência de dados.
-* **PostgreSQL**: Banco de dados relacional.
-* **Docker**: Gerenciamento de containers para infraestrutura.
+* **PostgreSQL**: Banco de dados relacional (via Docker).
+* **Dropzone.js**: Biblioteca Front-end para processamento de uploads drag-and-drop.
+* **JUnit 5 & Mockito**: Ferramentas para garantia de qualidade via testes automatizados unitários.
 
 ---
 
@@ -50,9 +52,9 @@ O projeto foi construído utilizando as seguintes tecnologias:
 
 A arquitetura do projeto segue o padrão de camadas:
 
-* `domain`: Contém as entidades JPA que representam as tabelas do banco de dados.
+* `domain`: Contém as entidades JPA que representam as tabelas do banco de dados (Site, Tecnico, LoteUpload).
 * `repository`: Interfaces para comunicação e acesso aos dados (Spring Data).
-* `service`: Camada de lógica de negócio e manipulação de Entrada/Saída (IO).
+* `service`: Camada de lógica de negócio, manipulação de Entrada/Saída (IO) e regras de segurança de sistema de arquivos.
 * `controller`: Responsável por expor os endpoints REST da API.
 
 ---
