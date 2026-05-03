@@ -3,64 +3,76 @@ package br.com.behive.bhv_transfer.service;
 import br.com.behive.bhv_transfer.domain.ArquivoFoto;
 import br.com.behive.bhv_transfer.domain.LoteUpload;
 import br.com.behive.bhv_transfer.domain.Site;
+import br.com.behive.bhv_transfer.domain.Tecnico;
 import br.com.behive.bhv_transfer.repository.ArquivoFotoRepository;
 import br.com.behive.bhv_transfer.repository.LoteUploadRepository;
 import br.com.behive.bhv_transfer.repository.SiteRepository;
+import br.com.behive.bhv_transfer.repository.TecnicoRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
 public class UploadService {
 
-    private final SiteRepository siteRepository;
-    private final LoteUploadRepository loteRepository;
-    private final ArquivoFotoRepository fotoRepository;
+    @Value("${app.base.url:http://localhost:8080}")
+    private String baseUrl;
 
     @Value("${app.pasta.upload}")
     private String pastaUpload;
 
-    public UploadService(SiteRepository siteRepository, LoteUploadRepository loteRepository, ArquivoFotoRepository fotoRepository) {
+    private final SiteRepository siteRepository;
+    private final TecnicoRepository tecnicoRepository;
+    private final LoteUploadRepository loteRepository;
+    private final ArquivoFotoRepository fotoRepository;
+
+    public UploadService(SiteRepository siteRepository,
+                         TecnicoRepository tecnicoRepository,
+                         LoteUploadRepository loteRepository,
+                         ArquivoFotoRepository fotoRepository) {
         this.siteRepository = siteRepository;
+        this.tecnicoRepository = tecnicoRepository;
         this.loteRepository = loteRepository;
         this.fotoRepository = fotoRepository;
     }
 
     @Transactional
-    public LoteUpload salvarVistoriaCompactada(UUID siteId, String nomeTecnico, MultipartFile arquivoZip) throws IOException {
-        // 1. Valida o Site
-        Site site = siteRepository.findById(siteId)
-                .orElseThrow(() -> new RuntimeException("Site não encontrado!"));
+    public Map<String, String> salvarVistoria(UUID siteId, UUID tecnicoId, MultipartFile arquivo) throws IOException {
 
-        // 2. Cria o registro do Lote
-        LoteUpload lote = new LoteUpload(site, nomeTecnico);
+        Site site = siteRepository.findById(siteId)
+                .orElseThrow(() -> new RuntimeException("Site não encontrado"));
+
+        Tecnico tecnico = tecnicoRepository.findById(tecnicoId)
+                .orElseThrow(() -> new RuntimeException("Técnico não encontrado"));
+
+        LoteUpload lote = new LoteUpload(site, tecnico.getNome());
         lote = loteRepository.save(lote);
 
-        // 3. Define e cria a pasta física no servidor da Behive
-        Path caminhoPasta = Paths.get(pastaUpload);
-        if (!Files.exists(caminhoPasta)) {
-            Files.createDirectories(caminhoPasta);
-        }
+        String nomePasta = tecnico.getNome().replaceAll(" ", "_");
+        Path caminho = Paths.get(pastaUpload, nomePasta, lote.getId().toString());
+        Files.createDirectories(caminho);
 
-        // 4. Salva o arquivo ZIP/RAR com nome único para evitar sobreposição
-        String nomeUnico = UUID.randomUUID().toString() + "_" + arquivoZip.getOriginalFilename();
-        Path caminhoDestino = caminhoPasta.resolve(nomeUnico);
-        arquivoZip.transferTo(caminhoDestino.toFile());
+        String nomeFinal = arquivo.getOriginalFilename();
+        Path caminhoDestino = caminho.resolve(nomeFinal);
+        arquivo.transferTo(caminhoDestino.toFile());
 
-        // 5. Registra no banco que este lote possui este arquivo específico
-        ArquivoFoto registro = new ArquivoFoto(lote, arquivoZip.getOriginalFilename(), caminhoDestino.toString(), arquivoZip.getSize());
+        ArquivoFoto registro = new ArquivoFoto(lote, nomeFinal, caminhoDestino.toString(), arquivo.getSize());
         fotoRepository.save(registro);
 
-        return lote;
+        String link = baseUrl + "/vistorias/" + nomePasta + "/" + lote.getId() + "/" + nomeFinal;
+
+        return Map.of(
+                "mensagem", "Upload realizado com sucesso!",
+                "link", link,
+                "tecnico", tecnico.getNome()
+        );
     }
 }
