@@ -78,52 +78,54 @@
     Dropzone.autoDiscover = false;
 
     const myDropzone = new Dropzone("#dropzone-area", {
-        url: "http://localhost:8080/api/uploads",
-        paramName: "fotos", 
-        maxFiles: 1,
-        acceptedFiles: ".zip,.rar,.7z",
-        autoProcessQueue: true,
-        init: function() {
+            url: "http://localhost:8080/api/uploads",
+            paramName: "fotos", 
+            maxFiles: 1,
+            acceptedFiles: ".zip,.rar,.7z",
+            autoProcessQueue: true,
             
-            this.on("sending", function(file, xhr, formData) {
-                const tecnicoId = document.getElementById("tecnicoSelect").value;
-                const siteId = document.getElementById("siteSelect").value;
+            chunking: true,
+            maxFilesize: 5120,
+            forceChunking: true,          
+            chunkSize: 10 * 1024 * 1024,  
+            retryChunks: true,          
+            retryChunksLimit: 3,         
+            parallelChunkUploads: false,  
+        
+            init: function() {
+                
+                this.on("sending", function(file, xhr, formData) {
+                    const tecnicoId = document.getElementById("tecnicoSelect").value;
+                    const siteId = document.getElementById("siteSelect").value;
 
-                // Bloqueia o envio se o técnico não preencheu as listas
-                if (!tecnicoId || !siteId) {
-                    alert("Por favor, selecione o Técnico e o Site antes de enviar o arquivo.");
+                    if (!tecnicoId || !siteId) {
+                        alert("Por favor, selecione o Técnico e o Site antes de enviar o arquivo.");
+                        this.removeFile(file);
+                        xhr.abort();
+                        return;
+                    }
+                    formData.append("tecnicoId", tecnicoId);
+                    formData.append("siteId", siteId);
+                });
+                
+                this.on("success", function(file, response) {
+                    const resDiv = document.getElementById("resultado");
+                    const linkA = document.getElementById("linkDownload");
+
+                    resDiv.style.display = "block";
+                    linkA.href = response.link;
+                    linkA.innerText = response.link;
+                    
+                    this.removeFile(file); 
+                });
+
+                this.on("error", function(file, message) {
+                    let erroReal = message.erro || message;
+                    alert("Falha no envio: " + erroReal);
                     this.removeFile(file);
-                    xhr.abort(); // Mata a requisição pro Java não quebrar
-                    return;
-                }
-
-                // Anexa os UUIDs de forma invisível para o Java processar
-                formData.append("tecnicoId", tecnicoId);
-                formData.append("siteId", siteId);
-            });
-            
-            this.on("success", function(file, response) {
-                const resDiv = document.getElementById("resultado");
-                const linkA = document.getElementById("linkDownload");
-                
-                // Exibe a div de sucesso
-                resDiv.style.display = "block";
-                
-                // Configura o link gerado pelo seu UploadService
-                linkA.href = response.link;
-                linkA.innerText = response.link;
-                
-                this.removeFile(file); // Limpa o quadrado azul para o próximo envio
-            });
-            
-            this.on("error", function(file, message) {
-                // Pega a mensagem de erro formatada que o Java mandou
-                let erroReal = message.erro || message;
-                alert("Falha no envio: " + erroReal);
-                this.removeFile(file);
-            });
-        }
-    });
+                });
+            }
+        });
 </script>
 </body>
 </html>

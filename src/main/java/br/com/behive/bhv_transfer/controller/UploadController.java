@@ -10,7 +10,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.Map;
 import java.util.UUID;
 
-@CrossOrigin(origins = "*") // Permite acesso do HTML local
+@CrossOrigin(origins = "*")
 @RestController
 @RequestMapping("/api/uploads")
 public class UploadController {
@@ -31,11 +31,16 @@ public class UploadController {
     public ResponseEntity<?> receberUpload(
             @RequestParam("siteId") UUID siteId,
             @RequestParam("tecnicoId") UUID tecnicoId,
+            @RequestParam(value = "dzuuid", required = false) String dzuuid,
+            @RequestParam(value = "dzchunkindex", defaultValue = "0") Integer chunkIndex,
+            @RequestParam(value = "dztotalchunkcount", defaultValue = "1") Integer totalChunks,
             @RequestParam("fotos") MultipartFile arquivo) {
 
         try {
-            // Chamada do método atualizado
-            Map<String, String> dadosUpload = uploadService.salvarVistoria(siteId, tecnicoId, arquivo);
+            // Repassamos as informações de fatiamento para o Service
+            Map<String, String> dadosUpload = uploadService.processarUpload(
+                    siteId, tecnicoId, arquivo, dzuuid, chunkIndex, totalChunks);
+
             return ResponseEntity.ok(dadosUpload);
         } catch (Exception e) {
             e.printStackTrace();

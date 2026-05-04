@@ -17,6 +17,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.util.Map;
 import java.util.UUID;
 
@@ -33,46 +34,60 @@ public class UploadService {
     private final TecnicoRepository tecnicoRepository;
     private final LoteUploadRepository loteRepository;
     private final ArquivoFotoRepository fotoRepository;
+    public UploadService(SiteRepository siteRepository, TecnicoRepository tecnicoRepository, LoteUploadRepository loteRepository, ArquivoFotoRepository fotoRepository) {
+            this.siteRepository = siteRepository;
+            this.tecnicoRepository = tecnicoRepository;
+            this.loteRepository = loteRepository;
+            this.fotoRepository = fotoRepository;
+        }
 
-    public UploadService(SiteRepository siteRepository,
-                         TecnicoRepository tecnicoRepository,
-                         LoteUploadRepository loteRepository,
-                         ArquivoFotoRepository fotoRepository) {
-        this.siteRepository = siteRepository;
-        this.tecnicoRepository = tecnicoRepository;
-        this.loteRepository = loteRepository;
-        this.fotoRepository = fotoRepository;
-    }
+        @Transactional
+        public Map<String, String> processarUpload(UUID siteId, UUID tecnicoId, MultipartFile chunk, String dzuuid, Integer chunkIndex, Integer totalChunks) throws IOException {
 
-    @Transactional
-    public Map<String, String> salvarVistoria(UUID siteId, UUID tecnicoId, MultipartFile arquivo) throws IOException {
+            if (dzuuid == null) dzuuid = UUID.randomUUID().toString();
 
-        Site site = siteRepository.findById(siteId)
-                .orElseThrow(() -> new RuntimeException("Site não encontrado"));
+            Path pastaTemp = Paths.get(pastaUpload, "temp", dzuuid);
+            Files.createDirectories(pastaTemp);
 
-        Tecnico tecnico = tecnicoRepository.findById(tecnicoId)
-                .orElseThrow(() -> new RuntimeException("Técnico não encontrado"));
+            Path arquivoChunk = pastaTemp.resolve("chunk_" + chunkIndex);
+            chunk.transferTo(arquivoChunk.toFile());
 
-        LoteUpload lote = new LoteUpload(site, tecnico.getNome());
-        lote = loteRepository.save(lote);
+            if (chunkIndex < totalChunks - 1) {
+                return Map.of("mensagem", "Fatia " + (chunkIndex + 1) + " de " + totalChunks + " recebida.");
+            }
 
-        String nomePasta = tecnico.getNome().replaceAll(" ", "_");
-        Path caminho = Paths.get(pastaUpload, nomePasta, lote.getId().toString());
-        Files.createDirectories(caminho);
+            Site site = siteRepository.findById(siteId).orElseThrow(() -> new RuntimeException("Site não encontrado"));
+            Tecnico tecnico = tecnicoRepository.findById(tecnicoId).orElseThrow(() -> new RuntimeException("Técnico não encontrado"));
 
-        String nomeFinal = arquivo.getOriginalFilename();
-        Path caminhoDestino = caminho.resolve(nomeFinal);
-        arquivo.transferTo(caminhoDestino.toFile());
+            LoteUpload lote = new LoteUpload(site, tecnico.getNome());
+            lote = loteRepository.save(lote);
 
-        ArquivoFoto registro = new ArquivoFoto(lote, nomeFinal, caminhoDestino.toString(), arquivo.getSize());
-        fotoRepository.save(registro);
+            String nomePasta = tecnico.getNome().replaceAll(" ", "_");
+            Path caminhoFinal = Paths.get(pastaUpload, nomePasta, lote.getId().toString());
+            Files.createDirectories(caminhoFinal);
 
-        String link = baseUrl + "/vistorias/" + nomePasta + "/" + lote.getId() + "/" + nomeFinal;
+            String nomeOriginal = chunk.getOriginalFilename();
+            Path arquivoFinal = caminhoFinal.resolve(nomeOriginal);
 
-        return Map.of(
-                "mensagem", "Upload realizado com sucesso!",
-                "link", link,
-                "tecnico", tecnico.getNome()
-        );
+            try (var outputStream = Files.newOutputStream(arquivoFinal, StandardOpenOption.CREATE, StandardOpenOption.APPEND)) {
+                for (int i = 0; i < totalChunks; i++) {
+                    Path pedaco = pastaTemp.resolve("chunk_" + i);
+                    Files.copy(pedaco, outputStream);
+                    Files.delete(pedaco);
+            }
+
+            Files.deleteIfExists(pastaTemp);
+
+            ArquivoFoto registro = new ArquivoFoto(lote, nomeOriginal, arquivoFinal.toString(), Files.size(arquivoFinal));
+            fotoRepository.save(registro);
+
+            String link = baseUrl + "/vistorias/" + nomePasta + "/" + lote.getId() + "/" + nomeOriginal;
+
+            return Map.of(
+                    "mensagem", "Upload concluído!",
+                    "link", link,
+                    "tecnico", tecnico.getNome()
+            );
+        }
     }
 }
