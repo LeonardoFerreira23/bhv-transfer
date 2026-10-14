@@ -58,7 +58,3 @@ A arquitetura do projeto segue o padrão de camadas:
 * `controller`: Responsável por expor os endpoints REST da API.
 
 ---
-
-## 📝 Licença
-
-Uso exclusivo interno — **Behive Tecnologia**.
